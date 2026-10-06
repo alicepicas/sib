@@ -126,6 +126,73 @@ class Dataset:
         }
         return pd.DataFrame.from_dict(data, orient="index", columns=self.features)
 
+    def dropna(self) -> 'Dataset':
+        """
+        Removes all samples (rows) that contain at least one NaN value.
+ 
+        Returns
+        -------
+        Dataset
+            The same Dataset object, without the samples that had NaN values
+        """
+        mask = ~np.isnan(self.X).any(axis=1)
+        self.X = self.X[mask]
+        if self.has_label():
+            self.y = self.y[mask]
+        return self
+ 
+    def fillna(self, value) -> 'Dataset':
+        """
+        Replaces all NaN values by a given value, or by the mean or median of each feature.
+ 
+        Parameters
+        ----------
+        value: float or str
+            A number used in every replacement, or "mean" / "median" to use
+            the mean / median of the feature where the NaN is
+ 
+        Returns
+        -------
+        Dataset
+            The same Dataset object, without NaN values
+        """
+        nan_mask = np.isnan(self.X)
+        if not np.any(nan_mask):
+            return self
+ 
+        for j in range(self.X.shape[1]):
+            col = self.X[:, j]
+            col_nan = np.isnan(col)
+            if np.any(col_nan):
+                if value == "mean":
+                    fill_val = np.nanmean(col)
+                elif value == "median":
+                    fill_val = np.nanmedian(col)
+                else:
+                    fill_val = float(value)
+                col[col_nan] = fill_val
+        return self
+ 
+    def remove_by_index(self, index: int) -> 'Dataset':
+        """
+        Removes a sample by its index.
+ 
+        Parameters
+        ----------
+        index: int
+            Index of the sample to remove
+ 
+        Returns
+        -------
+        Dataset
+            The same Dataset object, without the removed sample
+        """
+        self.X = np.delete(self.X, index, axis=0)
+        if self.has_label():
+            self.y = np.delete(self.y, index, axis=0)
+        return self
+
+    
     @classmethod
     def from_dataframe(cls, df: pd.DataFrame, label: str = None):
         """
