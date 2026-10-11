@@ -68,3 +68,41 @@ class Model(Estimator, ABC):
         """
         self.fit(dataset)
         return self.predict(dataset)
+
+
+    def score(self, dataset) -> float:
+        """
+        Compute the score of the model on the dataset.
+        The model needs to be fitted before calling this method.
+ 
+        Parameters
+        ----------
+        dataset: Dataset
+            The dataset to compute the score on.
+ 
+        Returns
+        -------
+        score: float
+            The score (error metric) of the model on the dataset.
+        """
+        if not self.is_fitted():
+            raise ValueError('Model needs to be fitted before calling score()')
+        return self._score(dataset)
+
+ 
+    @abstractmethod
+    def _score(self, dataset) -> float:
+        """
+        Compute the score of the model on the dataset.
+        Abstract method that needs to be implemented by all subclasses.
+ 
+        Parameters
+        ----------
+        dataset: Dataset
+            The dataset to compute the score on.
+ 
+        Returns
+        -------
+        score: float
+            The score (error metric) of the model on the dataset.
+        """
