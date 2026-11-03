@@ -1,6 +1,5 @@
 import copy
 from abc import ABCMeta, abstractmethod
- 
 import numpy as np
  
  
@@ -27,6 +26,24 @@ class Layer(metaclass=ABCMeta):
         -------
         output: np.ndarray
             The output of the layer
+        """
+        raise NotImplementedError
+ 
+    @abstractmethod
+    def backward_propagation(self, output_error: np.ndarray) -> np.ndarray:
+        """
+        Back propagates the output error of the layer.
+        Abstract method that needs to be implemented by all subclasses.
+ 
+        Parameters
+        ----------
+        output_error: np.ndarray
+            The error of the output of the layer, dE/dY
+ 
+        Returns
+        -------
+        input_error: np.ndarray
+            The error of the input of the layer, dE/dX, to pass to the previous layer
         """
         raise NotImplementedError
  
@@ -190,6 +207,32 @@ class DenseLayer(Layer):
         self.output = np.dot(self.input, self.weights) + self.biases
         return self.output
  
+    def backward_propagation(self, output_error: np.ndarray) -> np.ndarray:
+        """
+        Performs backward propagation on the given output error.
+        It computes the error of the input (dE/dX = dE/dY W^T), of the weights (dE/dW = X^T dE/dY)
+        and of the biases (dE/dB, the sum of dE/dY over the samples), and then updates the weights
+        and the biases with the optimizer. The input error is computed before updating the weights.
+ 
+        Parameters
+        ----------
+        output_error: np.ndarray
+            The error of the output of the layer, dE/dY (n_samples, n_units)
+ 
+        Returns
+        -------
+        input_error: np.ndarray
+            The error of the input of the layer, dE/dX (n_samples, n_features)
+        """
+        input_error = np.dot(output_error, self.weights.T)
+        weights_error = np.dot(self.input.T, output_error)
+        bias_error = np.sum(output_error, axis=0, keepdims=True)
+ 
+        self.weights = self.w_opt.update(self.weights, weights_error)
+        self.biases = self.b_opt.update(self.biases, bias_error)
+ 
+        return input_error
+ 
     def output_shape(self) -> tuple:
         """
         Returns the shape of the output of the layer.
@@ -200,4 +243,110 @@ class DenseLayer(Layer):
             The shape of the output of the layer, (n_units,)
         """
         return (self.n_units,)
-    
+ 
+ 
+class Dropout(Layer):
+    """
+    A dropout layer, a regularization technique.
+    During training, a random set of the inputs is temporarily set to zero (dropped out), and the remaining
+    ones are scaled up. This helps preventing overfitting. During inference, the input is not changed.
+ 
+    Parameters
+    ----------
+    probability: float
+        The dropout rate, between 0 (inclusive) and 1 (exclusive)
+ 
+    Attributes
+    ----------
+    mask: np.ndarray
+        The binomial mask that sets some of the inputs to 0
+    input: np.ndarray
+        The input of the layer
+    output: np.ndarray
+        The output of the layer
+    """
+ 
+    def __init__(self, probability: float):
+        """
+        Initialize the dropout layer.
+ 
+        Parameters
+        ----------
+        probability: float
+            The dropout rate, between 0 (inclusive) and 1 (exclusive)
+        """
+        if not 0 <= probability < 1:
+            raise ValueError("The probability must be greater than or equal to 0 and lower than 1")
+        self.probability = probability
+ 
+        self.mask = None
+        self.input = None
+        self.output = None
+ 
+    def forward_propagation(self, input: np.ndarray, training: bool = True) -> np.ndarray:
+        """
+        Performs forward propagation.
+        In training mode, it applies a random mask to the input and scales it by 1 / (1 - probability).
+        In inference mode, it returns the input unchanged.
+ 
+        Parameters
+        ----------
+        input: np.ndarray
+            The input of the layer
+        training: bool
+            Whether the network is being trained or not
+ 
+        Returns
+        -------
+        output: np.ndarray
+            The output of the layer
+        """
+        self.input = input
+ 
+        if training:
+            scaling_factor = 1 / (1 - self.probability)
+            self.mask = np.random.binomial(1, 1 - self.probability, size=input.shape)
+            self.output = input * self.mask * scaling_factor
+        else:
+            self.output = input
+ 
+        return self.output
+ 
+    def backward_propagation(self, output_error: np.ndarray) -> np.ndarray:
+        """
+        Performs backward propagation: the received error is multiplied by the mask.
+ 
+        Parameters
+        ----------
+        output_error: np.ndarray
+            The error of the output of the layer
+ 
+        Returns
+        -------
+        input_error: np.ndarray
+            The error of the input of the layer
+        """
+        return output_error * self.mask
+ 
+    def output_shape(self) -> tuple:
+        """
+        Returns the shape of the output of the layer, which is the shape of its input.
+ 
+        Returns
+        -------
+        shape: tuple
+            The shape of the output of the layer
+        """
+        return self.input_shape()
+ 
+    def parameters(self) -> int:
+        """
+        Returns the number of parameters of the layer. A dropout layer has no learnable parameters.
+ 
+        Returns
+        -------
+        parameters: int
+            Always 0
+        """
+        return 0
+ 
